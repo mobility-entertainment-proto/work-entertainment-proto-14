@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e4fa8">
+<title>今日の予定とタスク</title>
+<style>
+  :root {
+    --primary: #1e4fa8;
+    --primary-dark: #173f88;
+    --text: #222;
+    --muted: #555;
+    --line: #8a8a8a;
+    --bg: #f5f5f5;
+    --footer: #ebebeb;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* ヘッダー */
+  header {
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    padding-top: calc(8px + env(safe-area-inset-top));
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .icon-btn { background: none; border: 0; color: inherit; padding: 4px; cursor: pointer; display: flex; }
+  .brand { font-size: 24px; letter-spacing: .5px; flex: 1; }
+  .user-box { text-align: right; font-size: 14px; line-height: 1.4; min-width: 0; }
+  .user-box .email { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+  .status { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+  .status .dot { width: 12px; height: 12px; border-radius: 50%; background: #6cc24a; border: 1px solid #fff; }
+
+  /* 本体 */
+  main { flex: 1; width: 100%; max-width: 480px; margin: 0 auto; padding: 32px 24px 40px; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  h1 { font-size: 17px; font-weight: 500; text-align: center; margin: 24px 0 20px; }
+
+  .field { display: grid; grid-template-columns: 84px 1fr; align-items: end; gap: 12px; margin-bottom: 18px; }
+  .field label { text-align: right; font-size: 15px; padding-bottom: 6px; }
+  .field input, .field .value {
+    font: inherit; font-size: 15px; color: var(--text);
+    border: 0; border-bottom: 1px solid var(--line);
+    background: transparent; padding: 6px 0; width: 100%; min-width: 0;
+    border-radius: 0; outline: none;
+  }
+  .field input:focus { border-bottom: 2px solid var(--primary); padding-bottom: 5px; }
+  .field .value { word-break: break-all; }
+
+  .actions { margin-top: 40px; display: grid; gap: 14px; }
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    font: inherit; font-size: 18px; height: 56px; border-radius: 4px; cursor: pointer;
+    border: 2px solid var(--primary); transition: background .15s, transform .05s;
+  }
+  .btn:active { transform: scale(.99); }
+  .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-outline { background: #fff; color: var(--primary); }
+  .btn-outline:hover { background: #eef3fc; }
+
+  /* 完了画面 */
+  .done { text-align: center; padding-top: 10px; }
+  .done .msg-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 0 14px; }
+  .done .check { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); display: inline-flex; align-items: center; justify-content: center; }
+  .done h2 { font-size: 17px; font-weight: 600; margin: 0; }
+  .summary { background: #fff; border-radius: 6px; padding: 16px 20px; text-align: left; font-size: 14px; margin: 20px 0 24px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .summary dl { display: grid; grid-template-columns: 84px 1fr; gap: 10px 12px; margin: 0; }
+  .summary dt { color: var(--muted); }
+  .summary dd { margin: 0; word-break: break-all; }
+
+  /* 今日のヘッダー */
+  .day { position: relative; border-radius: 16px; padding: 16px 18px; color: #fff; text-align: left; overflow: hidden; margin-bottom: 14px; }
+  .day.morning { background: linear-gradient(135deg, #2f6fe0, #5ab0ff); }
+  .day.evening { background: linear-gradient(135deg, #3b2a6e, #e0707a); }
+  .day .date { font-size: 13px; opacity: .9; }
+  .day .greet { font-size: 22px; font-weight: 800; margin: 2px 0 8px; }
+  .day .stats { display: flex; gap: 8px; flex-wrap: wrap; }
+  .day .stats span { background: rgba(255,255,255,.2); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+  .day svg.deco { position: absolute; right: -6px; top: -6px; width: 110px; height: 110px; opacity: .9; }
+
+  .card { background: #fff; border-radius: 14px; text-align: left; box-shadow: 0 2px 10px rgba(30,79,168,.1); margin-bottom: 14px; overflow: hidden; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 6px; }
+  .card-head b { font-size: 15px; display: flex; align-items: center; gap: 6px; }
+  .card-head b svg { color: var(--primary); }
+  .card-head span { font-size: 12px; color: var(--muted); }
+  .src { font-size: 11px; color: #b0571a; background: #fff4e5; border-radius: 6px; padding: 2px 8px; margin: 0 16px 8px; display: inline-block; }
+
+  /* 次の予定 */
+  .next { margin: 4px 16px 10px; background: #eef3fc; border-radius: 12px; padding: 10px 12px; display: flex; align-items: center; gap: 12px; }
+  .next .mins { text-align: center; min-width: 64px; color: var(--primary); }
+  .next .mins b { display: block; font-size: 24px; line-height: 1.1; }
+  .next .mins small { font-size: 11px; font-weight: 700; }
+  .next .what { font-size: 14px; font-weight: 700; }
+  .next .what small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+  .next.now { background: #fff4e5; }
+  .next.now .mins { color: #d35400; }
+
+  /* タイムライン */
+  .tl { list-style: none; margin: 0; padding: 4px 16px 12px; position: relative; }
+  .tl li { display: grid; grid-template-columns: 50px 14px 1fr; gap: 8px; align-items: start; padding: 6px 0; position: relative; }
+  .tl .t { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); padding-top: 1px; }
+  .tl .dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; background: var(--c); box-shadow: 0 0 0 3px #fff; position: relative; z-index: 1; }
+  .tl li::before { content: ""; position: absolute; left: 63px; top: 18px; bottom: -8px; width: 2px; background: #e3e8f0; }
+  .tl li:last-child::before { display: none; }
+  .tl .ev { border-left: 3px solid var(--c); background: color-mix(in srgb, var(--c) 8%, #fff); border-radius: 0 8px 8px 0; padding: 6px 10px; }
+  .tl .ev b { font-size: 14px; display: block; }
+  .tl .ev small { font-size: 12px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+  .tl li.past { opacity: .45; }
+  .tl li.cur .ev { box-shadow: 0 0 0 2px var(--c); }
+  .tl li.nowline { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; color: #e74c3c; padding: 0 !important; }
+  .nowline::before { display: none !important; }
+  .tl li.nowline span { white-space: nowrap; }
+  .nowline i { flex: 1; height: 2px; background: #e74c3c; border-radius: 1px; }
+
+  /* タスク */
+  .tasks { list-style: none; margin: 0; padding: 0 16px 6px; }
+  .tasks li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid #eef0f4; }
+  .tasks li:first-child { border-top: 0; }
+  .tasks button.cb { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 8px; border: 2px solid #b8c4d8; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: all .2s; }
+  .tasks button.cb svg { width: 16px; height: 16px; opacity: 0; transform: scale(.4); transition: all .25s cubic-bezier(.2,1.8,.4,1); }
+  .tasks li.checked button.cb { background: #27ae60; border-color: #27ae60; }
+  .tasks li.checked button.cb svg { opacity: 1; transform: scale(1); }
+  .tasks .tx { flex: 1; min-width: 0; }
+  .tasks .tx b { font-size: 14px; display: block; transition: color .2s; }
+  .tasks li.checked .tx b { color: #9aa3b2; text-decoration: line-through; }
+  .tasks .tx small { font-size: 12px; color: var(--muted); }
+  .tag { font-size: 10px; font-weight: 800; border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+  .tag.high { background: #fdecea; color: #c0392b; }
+  .tag.mid { background: #fff4e5; color: #b0571a; }
+  .tag.low { background: #eef1f6; color: #5f6b7a; }
+  .prog { display: flex; align-items: center; gap: 10px; padding: 4px 16px 14px; font-size: 12px; color: var(--muted); }
+  .prog .bar { flex: 1; height: 8px; background: #eef1f6; border-radius: 4px; overflow: hidden; }
+  .prog .bar div { height: 100%; width: 0; background: #27ae60; border-radius: 4px; transition: width .5s; }
+  .allclear { margin: 0 16px 14px; background: #e9f7ef; color: #1e8449; border-radius: 10px; padding: 10px 12px; font-size: 14px; font-weight: 700; display: none; }
+  .allclear.show { display: block; animation: pop .5s cubic-bezier(.2,1.6,.4,1); }
+  @keyframes pop { from { transform: scale(.8); opacity: 0; } }
+
+  /* ふりかえり */
+  .review { display: flex; align-items: center; gap: 14px; padding: 4px 16px 12px; }
+  .ring { width: 84px; height: 84px; flex: 0 0 84px; position: relative; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring b { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 20px; }
+  .ring b small { font-size: 10px; color: var(--muted); font-weight: 700; }
+  .review p { margin: 0; font-size: 14px; line-height: 1.6; }
+  #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+
+  /* フッター */
+  footer { background: var(--footer); padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); font-size: 14px; }
+  footer nav { display: flex; flex-wrap: wrap; gap: 8px 0; }
+  footer nav a { color: var(--primary); text-decoration: none; padding: 0 12px; border-left: 1px solid #999; }
+  footer nav a:first-child { border-left: 0; padding-left: 0; }
+  footer .copy { color: #888; text-align: center; margin-top: 16px; font-size: 12px; }
+</style>
+</head>
+<body>
+  <header>
+    <button class="icon-btn" aria-label="メニュー">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </button>
+    <div class="brand">SEAT</div>
+    <div class="user-box">
+      <div class="email" id="headerUser"></div>
+      <div class="status">
+        <span class="dot"></span>テレワーク
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- 入力画面 -->
+    <section class="screen active" id="screen-form">
+      <h1>在席退席登録</h1>
+      <div class="field">
+        <label for="card">カード番号</label>
+        <input id="card" type="text" inputmode="numeric" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>ユーザーID</label>
+        <div class="value" id="userId"></div>
+      </div>
+      <div class="field">
+        <label for="comment">コメント</label>
+        <input id="comment" type="text" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="datetime">日時</label>
+        <input id="datetime" type="datetime-local">
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btnIn">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M11 7 9.6 8.4l2.6 2.6H2v2h10.2l-2.6 2.6L11 17l5-5-5-5zm9 12h-8v2h8a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-8v2h8v14z"/></svg>
+          在席登録
+        </button>
+        <button class="btn btn-outline" id="btnOut">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="m17 7-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8v-2H4V5z"/></svg>
+          退席登録
+        </button>
+      </div>
+    </section>
+
+    <!-- 完了画面 -->
+    <section class="screen" id="screen-done">
+      <div class="done">
+        <div class="msg-row"><span class="check"><svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg></span><h2 id="doneTitle">在席登録が完了しました</h2></div>
+        <div id="today"></div>
+        <div class="summary">
+          <dl>
+            <dt>ユーザーID</dt><dd id="sumUser"></dd>
+            <dt>日時</dt><dd id="sumTime"></dd>
+            <dt>コメント</dt><dd id="sumComment"></dd>
+          </dl>
+        </div>
+        <button class="btn btn-outline" id="btnBack" style="width:100%">戻る</button>
+      </div>
+    </section>
+  </main>
+  <canvas id="confetti"></canvas>
+
+  <footer>
+    <nav>
+      <a href="#">利用規約</a>
+      <a href="#">プライバシーポリシー</a>
+      <a href="#">ウェブアクセシビリティ</a>
+    </nav>
+    <div class="copy">Prototype — 実際の登録は行われません</div>
+  </footer>
+
+<script>
+  const USER_ID = 'taro.yamada@example.com';
+  const $ = (id) => document.getElementById(id);
+
+  $('headerUser').textContent = USER_ID;
+  $('userId').textContent = USER_ID;
+
+  function nowLocal() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  }
+  $('datetime').value = nowLocal();
+
+  function show(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+    window.scrollTo(0, 0);
+  }
+
+  // ---- 今日の予定とタスク ----
+  // 本番はカレンダーやタスク管理ツールから取得する想定。今はデモ用の架空データ
+  const DONE_KEY = 'today14-done-v1';   // このプロト専用の保存名（日付ごとに完了したタスク）
+  function fetchSchedule() {
+    return Promise.resolve([
+      { start: '09:30', end: '09:45', title: 'チーム朝会',               place: 'オンライン',   color: '#2f6fe0' },
+      { start: '11:00', end: '12:00', title: '新サービス企画レビュー',   place: '会議室A（5F）', color: '#8e44ad' },
+      { start: '12:00', end: '13:00', title: 'ランチ',                   place: '',             color: '#27ae60', lunch: true },
+      { start: '14:00', end: '14:30', title: '佐藤さんと1on1',           place: '集中ブース3',   color: '#e67e22' },
+      { start: '16:30', end: '17:30', title: '部内定例ミーティング',     place: '会議室C（3F）', color: '#2f6fe0' },
+    ]);
+  }
+  function fetchTasks() {
+    return Promise.resolve([
+      { id: 't1', title: '企画書の修正版を送る',       due: '今日 15:00まで', pri: 'high' },
+      { id: 't2', title: 'レビューのコメントに返信',   due: '今日中',         pri: 'high' },
+      { id: 't3', title: '出張の経費精算',             due: '今週中',         pri: 'mid' },
+      { id: 't4', title: '来週の会議室を予約',         due: '今週中',         pri: 'mid' },
+      { id: 't5', title: '週報を書く',                 due: '金曜まで',       pri: 'low' },
+    ]);
+  }
+  const TOMORROW_FIRST = { start: '10:00', title: '取引先との打ち合わせ', place: 'オンライン' };
+  const PRI = { high: '重要', mid: '普通', low: '低' };
+  const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const toMin = (hm) => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
+  function loadDone() {
+    try { const v = JSON.parse(localStorage.getItem(DONE_KEY)); if (v && v.date === ymd(new Date())) return v.ids; } catch {}
+    return [];   // 日付が変わったらリセット
+  }
+  function saveDone(ids) { try { localStorage.setItem(DONE_KEY, JSON.stringify({ date: ymd(new Date()), ids })); } catch {} }
+
+  const ICON_CAL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V9h14v11zM7 11h5v5H7z"/></svg>';
+  const ICON_TASK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-9 14-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
+  const CHECK = '<svg viewBox="0 0 24 24" fill="#fff"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>';
+  const SUN = '<svg class="deco" viewBox="0 0 100 100"><circle cx="60" cy="40" r="20" fill="#ffe08a"/><g stroke="#ffe08a" stroke-width="5" stroke-linecap="round"><path d="M60 6v8M60 66v8M26 40h8M86 40h8M36 16l6 6M78 58l6 6M36 64l6-6M78 22l6-6"/></g></svg>';
+  const MOON = '<svg class="deco" viewBox="0 0 100 100"><path d="M66 18a24 24 0 1 0 18 38 20 20 0 1 1-18-38z" fill="#fff4c2"/><circle cx="30" cy="30" r="2" fill="#fff"/><circle cx="40" cy="60" r="1.5" fill="#fff"/></svg>';
+
+  async function renderToday(kind) {
+    const [events, tasks] = await Promise.all([fetchSchedule(), fetchTasks()]);
+    const done = loadDone();
+    const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+    const isIn = kind === '在席';
+    const dateLabel = `${now.getMonth() + 1}月${now.getDate()}日（${WEEK[now.getDay()]}）`;
+    const meetings = events.filter(e => !e.lunch);
+    const left = tasks.filter(t => !done.includes(t.id));
+
+    if (isIn) {
+      const h = now.getHours();
+      const greet = h < 11 ? 'おはようございます！' : h < 17 ? 'こんにちは！' : 'おつかれさまです！';
+      const cur = events.find(e => toMin(e.start) <= nowMin && nowMin < toMin(e.end));
+      const nxt = events.find(e => toMin(e.start) > nowMin);
+      let tl = '', lineDone = false;
+      events.forEach(e => {
+        if (!lineDone && toMin(e.start) > nowMin) { tl += `<li class="nowline"><span>いま ${pad(now.getHours())}:${pad(now.getMinutes())}</span><i></i></li>`; lineDone = true; }
+        const st = toMin(e.end) <= nowMin ? 'past' : e === cur ? 'cur' : '';
+        tl += `<li class="${st}" style="--c:${e.color}"><span class="t">${e.start}</span><span class="dot"></span><div class="ev"><b>${e.title}</b><small><span>${e.start}〜${e.end}</span>${e.place ? `<span>📍 ${e.place}</span>` : ''}</small></div></li>`;
+      });
+      if (!lineDone) tl += `<li class="nowline"><span>いま ${pad(now.getHours())}:${pad(now.getMinutes())}</span><i></i></li>`;
+      const nextBox = cur ? `<div class="next now"><div class="mins"><b>いま</b><small>参加中</small></div><div class="what">${cur.title}<small>${cur.start}〜${cur.end}${cur.place ? ` ・ ${cur.place}` : ''}</small></div></div>`
+        : nxt ? `<div class="next"><div class="mins"><b>${toMin(nxt.start) - nowMin}</b><small>分後</small></div><div class="what">次は「${nxt.title}」<small>${nxt.start}〜${nxt.end}${nxt.place ? ` ・ ${nxt.place}` : ''}</small></div></div>`
+        : `<div class="next"><div class="mins"><b>✓</b><small>おわり</small></div><div class="what">今日の予定はすべて終わりました<small>おつかれさまでした</small></div></div>`;
+      $('today').innerHTML = `
+        <div class="day morning">${SUN}<div class="date">${dateLabel}</div><div class="greet">${greet}</div>
+          <div class="stats"><span>会議 ${meetings.length}件</span><span>タスク 残り${left.length}件</span></div></div>
+        <section class="card"><div class="card-head"><b>${ICON_CAL}今日の予定</b><span>${events.length}件</span></div>
+          <span class="src">デモ用の予定です</span>${nextBox}<ol class="tl">${tl}</ol></section>
+        <section class="card"><div class="card-head"><b>${ICON_TASK}今日のタスク</b><span id="taskCount"></span></div>
+          <ul class="tasks" id="taskList">${tasks.map(t => `<li class="${done.includes(t.id) ? 'checked' : ''}" data-id="${t.id}"><button class="cb" aria-label="${t.title}を完了にする" aria-pressed="${done.includes(t.id)}">${CHECK}</button><div class="tx"><b>${t.title}</b><small>${t.due}</small></div><span class="tag ${t.pri}">${PRI[t.pri]}</span></li>`).join('')}</ul>
+          <div class="prog"><div class="bar"><div id="taskBar"></div></div><span id="taskPct"></span></div>
+          <div class="allclear" id="allClear">🎉 今日のタスクをすべて完了しました！</div></section>`;
+      bindTasks(tasks);
+    } else {
+      const doneN = tasks.length - left.length, pct = Math.round(doneN / tasks.length * 100);
+      const c = 2 * Math.PI * 34;
+      $('today').innerHTML = `
+        <div class="day evening">${MOON}<div class="date">${dateLabel}</div><div class="greet">今日もおつかれさまでした！</div>
+          <div class="stats"><span>会議 ${meetings.length}件に参加</span><span>タスク ${doneN}件 完了</span></div></div>
+        <section class="card"><div class="card-head"><b>${ICON_TASK}今日のふりかえり</b><span>タスク ${doneN} / ${tasks.length}</span></div>
+          <div class="review"><div class="ring"><svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="34" fill="none" stroke="#eef1f6" stroke-width="10"/><circle id="ringArc" cx="42" cy="42" r="34" fill="none" stroke="#27ae60" stroke-width="10" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c}" style="transition:stroke-dashoffset 1s"/></svg><b>${pct}%<small>完了</small></b></div>
+            <p>${doneN === tasks.length ? '今日のタスクはすべて完了！すばらしい一日でした。' : doneN ? `今日は <b>${doneN}件</b> のタスクを完了しました。残りは明日、いっしょに片づけましょう。` : '今日は会議でいそがしい一日でしたね。タスクは明日に回しましょう。'}</p></div></section>
+        ${left.length ? `<section class="card"><div class="card-head"><b>${ICON_TASK}明日やること</b><span>${left.length}件</span></div>
+          <ul class="tasks">${left.map(t => `<li><span class="tag ${t.pri}">${PRI[t.pri]}</span><div class="tx"><b>${t.title}</b><small>${t.due.startsWith('今日') ? `${t.due.replace(/まで$/, '')}から持ち越し` : t.due}</small></div></li>`).join('')}</ul></section>` : ''}
+        <section class="card"><div class="card-head"><b>${ICON_CAL}明日の最初の予定</b></div>
+          <div class="next"><div class="mins"><b style="font-size:18px">${TOMORROW_FIRST.start}</b><small>から</small></div><div class="what">${TOMORROW_FIRST.title}<small>${TOMORROW_FIRST.place}</small></div></div>
+          <span class="src">デモ用の予定です</span></section>`;
+      requestAnimationFrame(() => { const a = document.getElementById('ringArc'); if (a) a.style.strokeDashoffset = c * (1 - doneN / tasks.length); });
+    }
+  }
+
+  function bindTasks(tasks) {
+    const update = (celebrate) => {
+      const done = loadDone(), n = tasks.filter(t => done.includes(t.id)).length;
+      $('taskCount').textContent = `${n} / ${tasks.length} 完了`;
+      $('taskBar').style.width = `${n / tasks.length * 100}%`;
+      $('taskPct').textContent = `${Math.round(n / tasks.length * 100)}%`;
+      const all = n === tasks.length;
+      $('allClear').classList.toggle('show', all);
+      if (all && celebrate) confetti();
+    };
+    $('taskList').querySelectorAll('li').forEach(li => li.querySelector('.cb').addEventListener('click', () => {
+      let done = loadDone();
+      const id = li.dataset.id, on = !done.includes(id);
+      done = on ? [...done, id] : done.filter(x => x !== id);
+      saveDone(done);
+      li.classList.toggle('checked', on);
+      li.querySelector('.cb').setAttribute('aria-pressed', on);
+      update(on);
+    }));
+    update(false);
+  }
+
+  function confetti() {
+    const cv = $('confetti'), ctx = cv.getContext('2d');
+    cv.width = innerWidth; cv.height = innerHeight;
+    const colors = ['#2f6fe0', '#27ae60', '#f1c40f', '#e67e22', '#8e44ad'];
+    const ps = Array.from({ length: 120 }, () => ({ x: Math.random() * cv.width, y: -20 - Math.random() * cv.height * .4, w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, vy: 2 + Math.random() * 3, vx: -1.5 + Math.random() * 3, r: Math.random() * 3, vr: -.2 + Math.random() * .4, c: colors[Math.floor(Math.random() * colors.length)] }));
+    const start = performance.now();
+    (function frame(t) {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      for (const p of ps) { p.x += p.vx; p.y += p.vy; p.r += p.vr; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(p.r))); ctx.restore(); }
+      if (t - start < 3500) requestAnimationFrame(frame); else ctx.clearRect(0, 0, cv.width, cv.height);
+    })(start);
+  }
+
+  function register(kind) {
+    const dt = $('datetime').value || nowLocal();
+    $('doneTitle').textContent = `${kind}登録が完了しました`;
+    $('sumUser').textContent = USER_ID;
+    $('sumTime').textContent = dt.replace('T', ' ').replace(/-/g, '/');
+    $('sumComment').textContent = $('comment').value || '—';
+    show('screen-done');
+    renderToday(kind);
+  }
+
+  $('btnIn').addEventListener('click', () => register('在席'));
+  $('btnOut').addEventListener('click', () => register('退席'));
+  $('btnBack').addEventListener('click', () => {
+    $('datetime').value = nowLocal();
+    show('screen-form');
+  });
+</script>
+</body>
+</html>
